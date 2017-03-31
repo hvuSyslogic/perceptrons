@@ -85,3 +85,30 @@ class Network(object):
     input_layer = self.layers[0]
     for node, value in zip(input_layer.nodes, pattern):
       node.SetValue(value)
+
+  def AdjustWeights(self, layer):
+    for node in layer.nodes:
+      for connection in node.connections:
+        connection.weight += node.error * node.GetValue()
+
+  def CalculateOutputError(self, target):
+    output_layer = self.layers[-1]
+    for node, target_value in zip(output_layer.nodes, target):
+      value = node.GetValue()
+      node.error = (target_value - value) * (1- value) * value
+    self.AdjustWeights(output_layer)
+
+
+  # def CalculateHiddenLayerError(self, previous_layer, layer):
+  #   for node in layer.nodes:
+  #     v = node.GetValue()
+  #     node.error = v * (1 - v) * ()
+
+  def ApplyTrainingPattern(self, pattern, target):
+    self.SetPattern(pattern)
+    self.CalculateOutputError(target)
+    # previous_layer = self.layers[-1]
+    # for layer in reversed(self.layers[1:-1]):
+    #   self.CalculateHiddenLayerError(previous_layer, layer)
+    #   previous_layer = layer
+    #

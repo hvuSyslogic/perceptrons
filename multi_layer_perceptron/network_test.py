@@ -93,3 +93,32 @@ class TestBuildingNetwork(unittest.TestCase):
     expected = network.Sigmoid(expected)
 
     self.assertAlmostEqual(retrieved, expected, places=3)
+
+  def testErrorCalculation(self):
+    number_of_nodes = [2, 2, 1]
+    n = network.Network(*number_of_nodes)
+    n.Clear()
+    output_layer = n.layers[2]
+    hidden_layer = n.layers[1]
+    input_layer = n.layers[0]
+
+    n.SetWeight(hidden_layer.nodes[0], input_layer.nodes[0], 0.10)
+    n.SetWeight(hidden_layer.nodes[0], input_layer.nodes[1], 0.80)
+    n.SetWeight(hidden_layer.nodes[1], input_layer.nodes[0], 0.40)
+    n.SetWeight(hidden_layer.nodes[1], input_layer.nodes[1], 0.60)
+
+    n.SetWeight(output_layer.nodes[0], hidden_layer.nodes[0], 0.30)
+    n.SetWeight(output_layer.nodes[0], hidden_layer.nodes[1], 0.90)
+
+    pattern = [0.35, 0.9]
+    n.SetPattern(pattern)
+    retrieved = output_layer.nodes[0].GetValue()
+    expected = 0.69
+    self.assertAlmostEqual(retrieved, expected, places=3)
+    n.CalculateOutputError([0.5])
+    self.assertAlmostEqual(n.layers[-1].nodes[0].error, -0.0406, places=3)
+
+    node = n.layers[-1].nodes[0]
+    expected_weights = [0.2719, 0.8719]
+    for connection, ew in zip(node.connections, expected_weights):
+      self.assertAlmostEqual(connection.weight, ew, places=3)
