@@ -3,8 +3,33 @@ import unittest
 import csv
 import network
 
+class TestNodes(unittest.TestCase):
+  def testInputNodeCreation(self):
+    node = network.InputNode()
+    self.assertIsNone(node.value)
+    self.assertFalse(node.foreward_connections)
+    self.assertTrue(isinstance(node, network.Node))
+    self.assertTrue(isinstance(node, network.ForwardConnectable))
+    self.assertFalse(isinstance(node, network.BackwardConnectable))
 
-class TestBuildingNetwork(unittest.TestCase):
+
+  def testHiddenNode(self):
+    node = network.HiddenNode()
+    self.assertIsNone(node.value)
+    self.assertFalse(node.foreward_connections)
+    self.assertFalse(node.backward_connections)
+    self.assertTrue(isinstance(node, network.Node))
+    self.assertTrue(isinstance(node, network.ForwardConnectable))
+    self.assertTrue(isinstance(node, network.BackwardConnectable))
+
+  def testOutputNode(self):
+    node = network.OutputNode()
+    self.assertIsNone(node.value)
+    self.assertFalse(node.backward_connections)
+    self.assertTrue(isinstance(node, network.Node))
+    self.assertFalse(isinstance(node, network.ForwardConnectable))
+    self.assertTrue(isinstance(node, network.BackwardConnectable))
+
   def testNumberOfLayers(self):
     n = network.Network(2, 2, 1)
     self.assertEqual(len(n.layers), 3)
@@ -33,47 +58,106 @@ class TestBuildingNetwork(unittest.TestCase):
     n = network.Network(*number_of_nodes)
     pattern = [9.2, 12.12]
     n.SetPattern(pattern)
-    n.Clear()
+    n.ClearValues()
     for layer in n.layers:
       hidden_nodes = layer.nodes
       for node in hidden_nodes:
         self.assertIsNone(node.value)
 
+  def testConstuctionOfNodes(self):
+    node = network.InputNode()
+    self.assertTrue(isinstance(node, network.InputNode))
+    node = network.HiddenNode()
+    self.assertTrue(isinstance(node, network.HiddenNode))
+    node = network.OutputNode()
+    self.assertTrue(isinstance(node, network.OutputNode))
+
+    layer = network.InputLayer(2)
+    self.assertEqual(len(layer), 2)
+    for node in layer:
+      self.assertTrue(isinstance(node, network.InputNode))
+
+    layer = network.Layer(3)
+    self.assertEqual(len(layer), 3)
+    for node in layer:
+      self.assertTrue(isinstance(node, network.HiddenNode))
+
+    layer = network.OutputLayer(3)
+    self.assertEqual(len(layer), 3)
+    for node in layer:
+      self.assertTrue(isinstance(node, network.OutputNode))
+
   def testConnections(self):
-    number_of_nodes = [2, 2, 1]
+    number_of_input_nodes = 2
+    number_of_hidden_nodes = 6
+    number_of_output_nodes = 12
+
+    number_of_nodes = [
+      number_of_input_nodes,
+      number_of_hidden_nodes,
+      number_of_output_nodes
+    ]
+
     n = network.Network(*number_of_nodes)
+
     input_layer = n.layers[0]
+    self.assertEqual(len(input_layer), number_of_input_nodes)
     for node in input_layer.nodes:
       self.assertTrue(isinstance(node, network.InputNode))
       self.assertIsNone(node.value)
-      self.assertFalse(hasattr(node, 'connections'))
+      self.assertFalse(hasattr(node, 'backward_connections'))
+      self.assertTrue(hasattr(node, 'foreward_connections'))
 
-    for layer in n.layers[1:]:
-      for node in layer.nodes:
-        self.assertTrue(isinstance(node, network.Neuron))
-        self.assertIsNone(node.value)
-        self.assertEqual(len(node.connections), 2)
-        for connection in node.connections:
-          self.assertTrue(-1 <= connection.weight <= 1)
+    for layer in n.layers[1:-1]:
+      for hidden_node in layer.nodes:
+        self.assertTrue(isinstance(hidden_node, network.HiddenNode))
+        self.assertIsNone(hidden_node.value)
+        self.assertEqual(
+          len(hidden_node.backward_connections),
+          number_of_input_nodes
+        )
+        self.assertEqual(
+          len(hidden_node.foreward_connections),
+          number_of_output_nodes
+        )
+
+        for node in hidden_node.backward_connections.keys():
+          self.assertTrue(isinstance(node, network.InputNode))
+
+        for node in hidden_node.foreward_connections.keys():
+          self.assertTrue(isinstance(node, network.OutputNode))
+
+    output_layer = n.layers[-1]
+    self.assertEqual(len(output_layer), number_of_output_nodes)
+    for node in output_layer.nodes:
+      self.assertTrue(isinstance(node, network.OutputNode))
+      self.assertIsNone(node.value)
+      self.assertFalse(hasattr(node, 'foreward_connections'))
+      self.assertEqual(len(node.backward_connections), number_of_hidden_nodes)
+      for node, connection in node.backward_connections.iteritems():
+        self.assertTrue(isinstance(node, network.HiddenNode))
+        self.assertTrue(isinstance(connection, network.Connection))
+        self.assertTrue(-1 <= connection.weight <= 1)
 
   def testSetWeight(self):
     number_of_nodes = [2, 2, 1]
     n = network.Network(*number_of_nodes)
-    n.Clear()
+    n.ClearValues()
     hidden_layer = n.layers[1]
     input_layer = n.layers[0]
     n.SetWeight(hidden_layer.nodes[0], input_layer.nodes[0], 12.)
     n.SetWeight(hidden_layer.nodes[0], input_layer.nodes[1], 8.)
     pattern = [9.2, 12.12]
     n.SetPattern(pattern)
-    retrieved = hidden_layer.nodes[0].GetValue()
+    n.FeedForward()
+    retrieved = hidden_layer.nodes[0].value
     expected = network.Sigmoid(12. * 9.2 + 8. * 12.12)
     self.assertAlmostEqual(retrieved, expected, places=3)
 
   def testOutputValue(self):
     number_of_nodes = [2, 2, 1]
     n = network.Network(*number_of_nodes)
-    n.Clear()
+    n.ClearValues()
     output_layer = n.layers[2]
     hidden_layer = n.layers[1]
     input_layer = n.layers[0]
@@ -88,37 +172,115 @@ class TestBuildingNetwork(unittest.TestCase):
 
     pattern = [3.5, 2.8]
     n.SetPattern(pattern)
-    retrieved = output_layer.nodes[0].GetValue()
+    n.FeedForward()
+    retrieved = output_layer.nodes[0].value
     expected = 0.56 * network.Sigmoid(1.31) + 0.71 * network.Sigmoid(2.04)
     expected = network.Sigmoid(expected)
 
     self.assertAlmostEqual(retrieved, expected, places=3)
 
-  def testErrorCalculation(self):
-    number_of_nodes = [2, 2, 1]
+  def testSettingTargetValues(self):
+    number_of_nodes = [2, 2, 2]
     n = network.Network(*number_of_nodes)
-    n.Clear()
+    n.ClearValues()
+
     output_layer = n.layers[2]
     hidden_layer = n.layers[1]
     input_layer = n.layers[0]
 
-    n.SetWeight(hidden_layer.nodes[0], input_layer.nodes[0], 0.10)
-    n.SetWeight(hidden_layer.nodes[0], input_layer.nodes[1], 0.80)
-    n.SetWeight(hidden_layer.nodes[1], input_layer.nodes[0], 0.40)
-    n.SetWeight(hidden_layer.nodes[1], input_layer.nodes[1], 0.60)
+    n.SetWeight(hidden_layer.nodes[0], input_layer.nodes[0], 0.23)
+    n.SetWeight(hidden_layer.nodes[0], input_layer.nodes[1], 0.18)
+    n.SetWeight(hidden_layer.nodes[1], input_layer.nodes[0], 0.47)
+    n.SetWeight(hidden_layer.nodes[1], input_layer.nodes[1], 0.14)
 
-    n.SetWeight(output_layer.nodes[0], hidden_layer.nodes[0], 0.30)
-    n.SetWeight(output_layer.nodes[0], hidden_layer.nodes[1], 0.90)
+    n.SetWeight(output_layer.nodes[0], hidden_layer.nodes[0], 0.56)
+    n.SetWeight(output_layer.nodes[0], hidden_layer.nodes[1], 0.71)
 
-    pattern = [0.35, 0.9]
-    n.SetPattern(pattern)
-    retrieved = output_layer.nodes[0].GetValue()
-    expected = 0.69
-    self.assertAlmostEqual(retrieved, expected, places=3)
-    n.CalculateOutputError([0.5])
-    self.assertAlmostEqual(n.layers[-1].nodes[0].error, -0.0406, places=3)
+    n.SetWeight(output_layer.nodes[1], hidden_layer.nodes[0], 0.58)
+    n.SetWeight(output_layer.nodes[1], hidden_layer.nodes[1], 0.18)
 
-    node = n.layers[-1].nodes[0]
-    expected_weights = [0.2719, 0.8719]
-    for connection, ew in zip(node.connections, expected_weights):
-      self.assertAlmostEqual(connection.weight, ew, places=3)
+    target_values = [0.12, 9.27]
+    n.SetPattern([9.1, 1.2])
+    n.SetTargetValues(target_values)
+    n.FeedForward()
+
+    output_layer = n.layers[2]
+
+    # Test errors for output layer.
+    for output_node, target_value in zip(output_layer.nodes, target_values):
+      value = output_node.value
+
+      expected_actual_error = target_value - value
+      retrieved_actual_error = output_node.GetActualError()
+      self.assertAlmostEqual(retrieved_actual_error,
+                             expected_actual_error, places=3)
+
+      expected_error = value * (1 - value) * retrieved_actual_error
+      retrieved_error = output_node.GetError()
+
+      self.assertAlmostEqual(retrieved_error,
+                             expected_error, places=3)
+
+      # Test errors for hidden layer.
+      for hidden_node in n.layers[1].nodes:
+        expected_actual_error = 0.
+        for ouput_node in output_layer.nodes:
+          connection = n.GetConnection(ouput_node, hidden_node)
+          expected_actual_error += connection.weight * ouput_node.GetError()
+
+        retrieved_actual_error = hidden_node.GetActualError()
+        self.assertAlmostEqual(retrieved_actual_error,
+                               expected_actual_error, places=3)
+        value = hidden_node.value
+        expected_error = value * (1 - value) * retrieved_actual_error
+        retrieved_error = hidden_node.GetError()
+
+        self.assertAlmostEqual(retrieved_error,
+                               expected_error, places=3)
+
+  def testProcessPattern(self):
+    number_of_nodes = [2, 2, 1]
+    n = network.Network(*number_of_nodes)
+    output_layer = n.layers[2]
+    hidden_layer = n.layers[1]
+    input_layer = n.layers[0]
+
+    n.SetWeight(hidden_layer.nodes[0], input_layer.nodes[0], 0.1)
+    n.SetWeight(hidden_layer.nodes[0], input_layer.nodes[1], 0.8)
+    n.SetWeight(hidden_layer.nodes[1], input_layer.nodes[0], 0.4)
+    n.SetWeight(hidden_layer.nodes[1], input_layer.nodes[1], 0.6)
+
+    n.SetWeight(output_layer.nodes[0], hidden_layer.nodes[0], 0.3)
+    n.SetWeight(output_layer.nodes[0], hidden_layer.nodes[1], 0.9)
+
+
+    n.ProcessPattern([0.35, 0.9], [0.5])
+
+    self.assertAlmostEqual(output_layer.nodes[0].value, 0.69, places=3)
+
+    print output_layer.nodes[0].GetError()
+    print output_layer.nodes[0].value
+
+    self.assertAlmostEqual(
+      n.GetWeight(hidden_layer.nodes[0], input_layer.nodes[0]),
+      0.09916,
+      places=3
+    )
+
+    self.assertAlmostEqual(
+      n.GetWeight(hidden_layer.nodes[0], input_layer.nodes[1]),
+      0.7978,
+      places=3
+    )
+
+    self.assertAlmostEqual(
+      n.GetWeight(hidden_layer.nodes[1], input_layer.nodes[0]),
+      0.3972,
+      places=3
+    )
+
+    self.assertAlmostEqual(
+      n.GetWeight(hidden_layer.nodes[1], input_layer.nodes[1]),
+      0.5928,
+      places=3
+    )

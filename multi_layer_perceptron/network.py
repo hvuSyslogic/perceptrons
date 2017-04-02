@@ -1,40 +1,83 @@
+import abc
 import random
 import math
+
 
 def Sigmoid(x):
   return 1 / (1 + math.exp(-x))
 
+
 class FailedToSetWeight(Exception):
   pass
 
-class InputNode(object):
+
+class Node(object):
+  __metaclass__ = abc.ABCMeta
+
   def __init__(self):
+    super(Node, self).__init__()
     self.value = None
 
-  def SetValue(self, value):
-    self.value = value
-
-  def GetValue(self):
-    return self.value
-
-class Neuron(InputNode):
+class ForwardConnectable(object):
   def __init__(self):
-    super(Neuron, self).__init__()
-    self.connections = []
+    super(ForwardConnectable, self).__init__()
+    self.foreward_connections = {}
+
+
+class BackwardConnectable(object):
+  def __init__(self):
+    super(BackwardConnectable, self).__init__()
+    self.backward_connections = {}
 
   def Connect(self, other):
-    connection = Connection(other)
-    self.connections.append(connection)
+    connection = Connection()
+    self.backward_connections[other] = connection
+    other.foreward_connections[self] = connection
     return connection
 
-  def GetValue(self):
-    if not self.value:
-      s = sum([c.node.GetValue() * c.weight for c in self.connections])
-      self.value = Sigmoid(s)
-    return self.value
+class ErrorGenerator(object):
+  __metaclass__ = abc.ABCMeta
+
+  def __init__(self):
+    super(ErrorGenerator, self).__init__()
+    self._error = None
+
+  def ClearError(self):
+    self._error = None
+
+  @abc.abstractmethod
+  def GetActualError(self):
+    pass
+
+  def GetError(self):
+    if self._error is None:
+      value = self.value
+      self._error = value * (1. - value) * self.GetActualError()
+    return self._error
+
+
+class InputNode(Node, ForwardConnectable):
+  pass
+
+
+class HiddenNode(ForwardConnectable, BackwardConnectable, ErrorGenerator, Node):
+  def GetActualError(self):
+    return sum(
+      node.GetError() * connection.weight
+      for node, connection in self.foreward_connections.iteritems()
+    )
+
+
+class OutputNode(BackwardConnectable, ErrorGenerator, Node):
+  def SetTarget(self, target):
+    self._target = target
+
+  def GetActualError(self):
+    return self._target - self.value
+
 
 class Layer(object):
-  node_type = Neuron
+  node_type = HiddenNode
 
   def __init__(self, number_of_nodes):
     self.nodes = [self.node_type() for _ in range(number_of_nodes)]
@@ -42,73 +85,95 @@ class Layer(object):
   def __len__(self):
     return len(self.nodes)
 
+  def __iter__(self):
+    return iter(self.nodes)
+
+
 class InputLayer(Layer):
   node_type = InputNode
 
+
+class OutputLayer(Layer):
+  node_type = OutputNode
+
+
 class Connection(object):
-  def __init__(self, node):
-    self.node = node
+  def __init__(self):
     self.weight = random.uniform(-1., 1.)
+
 
 class Network(object):
   def __init__(self, *nodes_per_layer):
+    self.learning_rate = 1
     self.layers = [InputLayer(nodes_per_layer[0])]
-    self.layers.extend([Layer(n) for n in nodes_per_layer[1:]])
-    self.connections = {}
+    self.layers.extend([Layer(n) for n in nodes_per_layer[1:-1]])
+    self.layers.append(OutputLayer(nodes_per_layer[-1]))
+    self.all_backward_connections = {}
     previous_layer = None
     for layer in self.layers:
       if previous_layer:
-        for node1 in layer.nodes:
-          for node2 in previous_layer.nodes:
-            connection = node1.Connect(node2)
-            self.connections[node1, node2] = connection
+        for destination_node in layer.nodes:
+          for source_node in previous_layer.nodes:
+            connection = destination_node.Connect(source_node)
+            self.all_backward_connections[destination_node, source_node] = connection
       previous_layer = layer
+    self.ClearValues()
 
   def RandomizeWeights(self):
     for layer in self.layers[1:]:
       for node in layer.nodes:
-        for connection in node.connections:
+        for connection in node.backward_connections:
           connection.weight = random.uniform(-1., 1.)
 
-  def Clear(self):
+  def ClearValues(self):
     for layer in self.layers:
       for node in layer.nodes:
         node.value = None
 
-  def SetWeight(self, node1, node2, weight):
-    connection = self.connections.get((node1, node2))
+  def ClearErrors(self):
+    for layer in self.layers[1:]:
+      for node in layer.nodes:
+        node.ClearError()
+
+  def GetConnection(self, destination_node, source_node):
+    return self.all_backward_connections.get((destination_node, source_node))
+
+  def SetWeight(self, destination_node, source_node, weight):
+    connection = self.GetConnection(destination_node, source_node)
     if not connection:
       raise FailedToSetWeight
     connection.weight = weight
 
+  def GetWeight(self, destination_node, source_node):
+    connection = self.GetConnection(destination_node, source_node)
+    if not connection:
+      raise FailedToSetWeight
+    return connection.weight
+
   def SetPattern(self, pattern):
-    input_layer = self.layers[0]
-    for node, value in zip(input_layer.nodes, pattern):
-      node.SetValue(value)
+    for node, value in zip(self.layers[0].nodes, pattern):
+      node.value = value
 
-  def AdjustWeights(self, layer):
-    for node in layer.nodes:
-      for connection in node.connections:
-        connection.weight += node.error * node.GetValue()
+  def SetTargetValues(self, target):
+    for output_node, target_value in zip(self.layers[-1].nodes, target):
+      output_node.SetTarget(target_value)
 
-  def CalculateOutputError(self, target):
-    output_layer = self.layers[-1]
-    for node, target_value in zip(output_layer.nodes, target):
-      value = node.GetValue()
-      node.error = (target_value - value) * (1- value) * value
-    self.AdjustWeights(output_layer)
-
-
-  # def CalculateHiddenLayerError(self, previous_layer, layer):
-  #   for node in layer.nodes:
-  #     v = node.GetValue()
-  #     node.error = v * (1 - v) * ()
-
-  def ApplyTrainingPattern(self, pattern, target):
+  def FeedForward(self, pattern):
     self.SetPattern(pattern)
-    self.CalculateOutputError(target)
-    # previous_layer = self.layers[-1]
-    # for layer in reversed(self.layers[1:-1]):
-    #   self.CalculateHiddenLayerError(previous_layer, layer)
-    #   previous_layer = layer
-    #
+    for layer in self.layers[1:]:
+      for node in layer.nodes:
+        node.value = Sigmoid(sum(n.value * c.weight for n, c in node.backward_connections.iteritems()))
+
+  def Backpropagate(self):
+    for layer in reversed(self.layers[1:-1]):
+      for node1 in layer:
+        for node2, connection in node1.backward_connections.iteritems():
+          connection.weight += self.learning_rate * node1.GetError() * node2.value
+
+
+  def ProcessPattern(self, pattern, target):
+    self.ClearValues()
+    self.ClearErrors()
+    self.FeedForward(pattern)
+    self.SetTargetValues(target)
+    self.Backpropagate()
