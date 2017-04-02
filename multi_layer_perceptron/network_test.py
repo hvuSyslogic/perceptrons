@@ -253,13 +253,9 @@ class TestNodes(unittest.TestCase):
     n.SetWeight(output_layer.nodes[0], hidden_layer.nodes[0], 0.3)
     n.SetWeight(output_layer.nodes[0], hidden_layer.nodes[1], 0.9)
 
-
     n.ProcessPattern([0.35, 0.9], [0.5])
 
     self.assertAlmostEqual(output_layer.nodes[0].value, 0.69, places=3)
-
-    print output_layer.nodes[0].GetError()
-    print output_layer.nodes[0].value
 
     self.assertAlmostEqual(
       n.GetWeight(hidden_layer.nodes[0], input_layer.nodes[0]),
