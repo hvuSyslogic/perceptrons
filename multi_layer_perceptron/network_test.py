@@ -253,10 +253,22 @@ class TestNodes(unittest.TestCase):
     n.SetWeight(output_layer.nodes[0], hidden_layer.nodes[0], 0.3)
     n.SetWeight(output_layer.nodes[0], hidden_layer.nodes[1], 0.9)
 
-    n.ProcessPattern([0.35, 0.9], [0.5])
+    n.FeedForward([0.35, 0.9])
+    print 'original output:', output_layer.nodes[0].value
 
+    n.ProcessPattern([0.35, 0.9], [0.5])
     self.assertAlmostEqual(output_layer.nodes[0].value, 0.69, places=3)
 
+    # Check output error.
+    self.assertAlmostEqual(output_layer.nodes[0].GetError(), -0.0406, places=3)
+
+    # Check new weights for output layer.
+    connection = n.GetConnection(output_layer.nodes[0], hidden_layer.nodes[0])
+    self.assertAlmostEqual(connection.weight, 0.272392, places=3)
+    connection = n.GetConnection(output_layer.nodes[0], hidden_layer.nodes[1])
+    self.assertAlmostEqual(connection.weight, 0.87305, places=3)
+
+    # Check new hidden layer weights.
     self.assertAlmostEqual(
       n.GetWeight(hidden_layer.nodes[0], input_layer.nodes[0]),
       0.09916,
@@ -280,3 +292,27 @@ class TestNodes(unittest.TestCase):
       0.5928,
       places=3
     )
+
+    # n.FeedForward([0.35, 0.9])
+    # print 'new output:', output_layer.nodes[0].value
+    #
+    # for _ in range(1000):
+    #   n.ProcessPattern([0.35, 0.9], [0.5])
+    #   print 'new output:', output_layer.nodes[0].value
+
+
+  def testBuildClassifier(self):
+    # network.BuildClassifier('iris_training.csv')
+    n = network.BuildClassifier('xor.csv', max_epochs=10)
+    output_layer = n.layers[2]
+    print n.SetPattern([1, 1, 1])
+    print output_layer.nodes[0].value, output_layer.nodes[1].value
+
+    print n.SetPattern([0, 0, 1])
+    print output_layer.nodes[0].value, output_layer.nodes[1].value
+
+    print n.SetPattern([1, 0, 1])
+    print output_layer.nodes[0].value, output_layer.nodes[1].value
+
+    print n.SetPattern([0, 1, 1])
+    print output_layer.nodes[0].value, output_layer.nodes[1].value

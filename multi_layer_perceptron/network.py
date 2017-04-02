@@ -1,6 +1,34 @@
 import abc
+import csv
 import random
 import math
+
+class PatternReader(object):
+  def __init__(self, filename, skip_first_line=False):
+    rows = [tokens for tokens in csv.reader(open(filename))]
+    if skip_first_line:
+      rows = rows[1:]
+    targets = {row[-1] for row in rows}
+    self.target_map = {}
+    self.input_length = len(rows[0]) - 1
+    self.target_length = len(targets)
+    for i, target_classification in enumerate(targets):
+      target = [0] * len(targets)
+      target[i] = 1
+      self.target_map[target_classification] = target
+    self.patterns = [
+      ([float(x) for x in row[:-1]], self.target_map[row[-1]])
+      for row in rows
+    ]
+
+  def GetClassificationFromOutput(self, output):
+    if len(output) != self.target_length:
+      raise ValueError
+    for classification, target in self.target_map.iteritems():
+      for s1, s2 in zip(target, output):
+        if s1 + s2 >= 1.85:
+          return classification
+    return 'Not Found'
 
 
 def Sigmoid(x):
@@ -79,7 +107,7 @@ class OutputNode(BackwardConnectable, ErrorGenerator, Node):
 class Layer(object):
   node_type = HiddenNode
 
-  def __init__(self, number_of_nodes):
+  def __init__(self, number_of_nodes, add_bias=True):
     self.nodes = [self.node_type() for _ in range(number_of_nodes)]
 
   def __len__(self):
@@ -96,7 +124,6 @@ class InputLayer(Layer):
 class OutputLayer(Layer):
   node_type = OutputNode
 
-
 class Connection(object):
   def __init__(self):
     self.weight = random.uniform(-1., 1.)
@@ -104,7 +131,7 @@ class Connection(object):
 
 class Network(object):
   def __init__(self, *nodes_per_layer):
-    self.learning_rate = 1
+    self.learning_rate = 1.
     self.layers = [InputLayer(nodes_per_layer[0])]
     self.layers.extend([Layer(n) for n in nodes_per_layer[1:-1]])
     self.layers.append(OutputLayer(nodes_per_layer[-1]))
@@ -165,7 +192,7 @@ class Network(object):
         node.value = Sigmoid(sum(n.value * c.weight for n, c in node.backward_connections.iteritems()))
 
   def Backpropagate(self):
-    for layer in reversed(self.layers[1:-1]):
+    for layer in reversed(self.layers[1:]):
       for node1 in layer:
         for node2, connection in node1.backward_connections.iteritems():
           connection.weight += self.learning_rate * node1.GetError() * node2.value
@@ -177,3 +204,21 @@ class Network(object):
     self.FeedForward(pattern)
     self.SetTargetValues(target)
     self.Backpropagate()
+
+def BuildClassifier(filename, max_epochs=10):
+  pattern_reader = PatternReader(filename)
+  input_length = pattern_reader.input_length
+  target_length = pattern_reader.target_length
+
+  n = Network(input_length, input_length * 2, target_length)
+  for _ in range(max_epochs):
+    for pattern, target in pattern_reader.patterns:
+      n.ProcessPattern(pattern, target)
+      # output_layer = n.layers[2]
+      # e = 0
+      # print len(output_layer)
+      # for node in output_layer:
+      #   e += node._error* node._error
+      #   print node._error,
+      # print e
+  return n
