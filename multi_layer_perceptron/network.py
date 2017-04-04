@@ -1,21 +1,29 @@
+"""Implements a feed-forward, back propagation perceptron."""
+
 import abc
 import random
 import math
 
 
-
 def Sigmoid(x):
+  """Returns the sigmoid value for x.
+
+  Arguments:
+    x: The numerical value to calculate its sigmoid.
+  """
   return 1 / (1 + math.exp(-x))
 
 
 class FailedToSetWeight(Exception):
-  pass
+  """Raised when a connection weight cannot be set."""
 
 class FailedToTrainNetwork(Exception):
-  pass
+  """Raised when a the neural network fails to train."""
 
 
 class Node(object):
+  """Generic node serving as the base for the input, hidden and output nodes.
+  """
   __metaclass__ = abc.ABCMeta
 
   def __init__(self):
@@ -23,23 +31,46 @@ class Node(object):
     self.value = None
 
 class ForwardConnectable(object):
+  """Mixin for nodes that can be connected forward.
+
+  Used for the input and hidden nodes but not for the output which
+  cannot be connected forwardly.
+  """
   def __init__(self):
     super(ForwardConnectable, self).__init__()
     self.foreward_connections = {}
 
 
 class BackwardConnectable(object):
+  """Mixin for nodes that can be connected backwards.
+
+    Used for the output and hidden nodes but not for the input which
+    cannot be connected forwardly.
+    """
   def __init__(self):
     super(BackwardConnectable, self).__init__()
     self.backward_connections = {}
 
   def Connect(self, other):
+    """Establishes a connection to another node.
+
+    Note that each node can have backward and forward connections (depending
+    on its nature). We keep both to facilitate both the feed forward and the
+    back propagation as well.
+
+    Arguments:
+       other: The node to connect to.
+    """
     connection = Connection()
     self.backward_connections[other] = connection
     other.foreward_connections[self] = connection
     return connection
 
 class ErrorGenerator(object):
+  """Mixin used as a base class for nodes that can generate error.
+
+  Only the hidden and output layer can generate errors but not the input.
+  """
   __metaclass__ = abc.ABCMeta
 
   def __init__(self):
@@ -47,13 +78,25 @@ class ErrorGenerator(object):
     self._error = None
 
   def ClearError(self):
+    """Resets the error."""
     self._error = None
 
   @abc.abstractmethod
   def GetActualError(self):
-    pass
+    """Must be implemented in derived class.
+
+    Returns:
+       The error for the node.
+    """
 
   def GetError(self):
+    """Gets the error for the node.
+
+    Calls the GetActualError (which must be implemented in derived levels.
+
+    Returns:
+       The error for the node.
+    """
     if self._error is None:
       value = self.value
       self._error = value * (1. - value) * self.GetActualError()
@@ -61,38 +104,66 @@ class ErrorGenerator(object):
 
 
 class BiasNode(object):
-  pass
+  """Designates a node as bias."""
 
 class InputNode(Node, ForwardConnectable):
-  pass
+  """Used in the input layer and receives the pattern."""
 
 class BiasInputNode(InputNode, BiasNode):
-  pass
-
+  """Bias node for an input node."""
 
 class HiddenNode(ForwardConnectable, BackwardConnectable, ErrorGenerator, Node):
+  """Used in the hidden layer."""
+
   def GetActualError(self):
+    """Implements the ErrorGenerator abstract method.
+
+    Returns:
+      The error for the hidden node as it is calculated by the back propagation.
+    """
     return sum(
       node.GetError() * connection.weight
       for node, connection in self.foreward_connections.iteritems()
     )
 
 class BiasHiddenNode(HiddenNode, BiasNode):
-  pass
-
+  """Bias node for a hidden node."""
 
 class OutputNode(BackwardConnectable, ErrorGenerator, Node):
+  """Used in the output layer."""
+
   def SetTarget(self, target):
+    """Sets the target value for the node.
+
+    Argument:
+      target: (float) the target's value.
+    """
     self._target = target
 
   def GetActualError(self):
+    """Implemets the ErrorGenerator abstract method.
+
+    Returns:
+      The error for the output node as it is calculated by the back propagation.
+    """
     return self._target - self.value
 
 def IsBiasNode(node):
+  """Checks wheather a node is bias or not.
+
+  Argument:
+    node: The node to check.
+
+  Returns:
+     True if the node is bias.
+  """
   return isinstance(node, BiasNode)
 
 
 class Layer(object):
+  """The base class for the inpui, hidden and output layers."""
+
+  # The node and biases types to use.
   node_type = None
   bias_node_type = None
 
@@ -109,19 +180,23 @@ class Layer(object):
 
 
 class InputLayer(Layer):
+  """The Input layer containing input nodes and biases."""
   node_type = InputNode
   bias_node_type = BiasInputNode
 
 class HiddenLayer(Layer):
+  """The hidden layer containing hidden nodes and biases."""
   node_type = HiddenNode
   bias_node_type = BiasHiddenNode
 
 
 class OutputLayer(Layer):
+  """The output layer containing hidden nodes and biases."""
   node_type = OutputNode
   bias_node_type = None
 
 class Connection(object):
+  """Connects two nodes."""
   def __init__(self):
     self.weight = random.uniform(-1., 1.)
 
