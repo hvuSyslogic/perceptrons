@@ -61,7 +61,7 @@ def MakePatternNormalizer(patterns):
 def MakeIrisPredictor():
   print('please wait..')
   _, normalizer = ReadIrisFile('iris.csv', values)
-  training_data, normalizer = ReadIrisFile('iris_training.csv', values, normalizer=normalizer)
+  training_data, normalizer = ReadIrisFile('training-patterns.csv', values, normalizer=normalizer)
 
   # You can change the layers (meaning the [4, 5, 5, 3] can for example become [4, 5, 3]
   # to see how the net performs when you are running the program. You can try any number
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     predictor = MakeIrisPredictor()
 
     correct, wrong = 0, 0
-    for tokens in csv.reader(open('iris_verifing.csv')):
+    for tokens in csv.reader(open('verification-patterns.csv')):
       try:
         pattern = [float(x) for x in tokens[0:-1]]
         target = tokens[-1]

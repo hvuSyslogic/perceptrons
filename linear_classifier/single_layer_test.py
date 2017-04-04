@@ -5,8 +5,8 @@ from single_layer import MakePerceptron
 
 class TestSingleLayerPerceptron(unittest.TestCase):
   def testUsingIris(self):
-      iris_perceptron = MakePerceptron('iris_training.csv')
-      for tokens in csv.reader(open('iris_verify.csv')):
+      iris_perceptron = MakePerceptron('training-patterns.csv')
+      for tokens in csv.reader(open('verification-patterns.csv')):
           tokens = [float(x) for x in tokens]
           input = tokens[:-1]
           input.append(1)
