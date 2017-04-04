@@ -62,7 +62,12 @@ def MakeIrisPredictor():
   print('please wait..')
   _, normalizer = ReadIrisFile('iris.csv', values)
   training_data, normalizer = ReadIrisFile('iris_training.csv', values, normalizer=normalizer)
-  n = network.GetTrainedNetwork(training_data, 0.0001, 8000, True, [4, 5, 3])
+
+  # You can change the layers (meaning the [4, 5, 5, 3] can for example become [4, 5, 3]
+  # to see how the net performs when you are running the program. You can try any number
+  # of layers / nodes except for the input / output that must always be 4 and 3.
+  # Also you can experiment with the minimum error which now is 0.0001.
+  n = network.GetTrainedNetwork(training_data, 0.00001, 8000, True, [4, 5, 5, 3])
   print('ready to predict..')
   def Predictor(sepal_length ,sepal_width ,petal_length ,petal_width):
     pattern = [sepal_length ,sepal_width ,petal_length ,petal_width]
@@ -82,8 +87,18 @@ def classifier(sepal_length ,sepal_width ,petal_length ,petal_width):
 
 if __name__ == '__main__':
     predictor = MakeIrisPredictor()
-    print (predictor(4.3, 3, 1.1, 0.1))
-    print (predictor(6.3 ,2.9 ,5.6 ,1.8))
-    print (predictor(6.2, 2.9, 4.3, 1.3))
 
+    correct, wrong = 0, 0
+    for tokens in csv.reader(open('iris_verifing.csv')):
+      try:
+        pattern = [float(x) for x in tokens[0:-1]]
+        target = tokens[-1]
+        if predictor(*pattern) == target:
+          correct += 1
+        else:
+          wrong += 1
+        print (predictor(*pattern), target)
+      except ValueError:
+        pass
+    print ('Correct: {} Wrong: {}'.format(correct, wrong))
 
