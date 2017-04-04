@@ -1,34 +1,7 @@
 import abc
-import csv
 import random
 import math
 
-class PatternReader(object):
-  def __init__(self, filename, skip_first_line=False):
-    rows = [tokens for tokens in csv.reader(open(filename))]
-    if skip_first_line:
-      rows = rows[1:]
-    targets = {row[-1] for row in rows}
-    self.target_map = {}
-    self.input_length = len(rows[0]) - 1
-    self.target_length = len(targets)
-    for i, target_classification in enumerate(targets):
-      target = [0] * len(targets)
-      target[i] = 1
-      self.target_map[target_classification] = target
-    self.patterns = [
-      ([float(x) for x in row[:-1]], self.target_map[row[-1]])
-      for row in rows
-    ]
-
-  def GetClassificationFromOutput(self, output):
-    if len(output) != self.target_length:
-      raise ValueError
-    for classification, target in self.target_map.iteritems():
-      for s1, s2 in zip(target, output):
-        if s1 + s2 >= 1.85:
-          return classification
-    return 'Not Found'
 
 
 def Sigmoid(x):
@@ -36,6 +9,9 @@ def Sigmoid(x):
 
 
 class FailedToSetWeight(Exception):
+  pass
+
+class FailedToTrainNetwork(Exception):
   pass
 
 
@@ -84,7 +60,13 @@ class ErrorGenerator(object):
     return self._error
 
 
+class BiasNode(object):
+  pass
+
 class InputNode(Node, ForwardConnectable):
+  pass
+
+class BiasInputNode(InputNode, BiasNode):
   pass
 
 
@@ -95,6 +77,9 @@ class HiddenNode(ForwardConnectable, BackwardConnectable, ErrorGenerator, Node):
       for node, connection in self.foreward_connections.iteritems()
     )
 
+class BiasHiddenNode(HiddenNode, BiasNode):
+  pass
+
 
 class OutputNode(BackwardConnectable, ErrorGenerator, Node):
   def SetTarget(self, target):
@@ -103,12 +88,18 @@ class OutputNode(BackwardConnectable, ErrorGenerator, Node):
   def GetActualError(self):
     return self._target - self.value
 
+def IsBiasNode(node):
+  return isinstance(node, BiasNode)
+
 
 class Layer(object):
-  node_type = HiddenNode
+  node_type = None
+  bias_node_type = None
 
   def __init__(self, number_of_nodes, add_bias=True):
     self.nodes = [self.node_type() for _ in range(number_of_nodes)]
+    if self.bias_node_type and add_bias:
+      self.nodes.append(self.bias_node_type())
 
   def __len__(self):
     return len(self.nodes)
@@ -119,10 +110,16 @@ class Layer(object):
 
 class InputLayer(Layer):
   node_type = InputNode
+  bias_node_type = BiasInputNode
+
+class HiddenLayer(Layer):
+  node_type = HiddenNode
+  bias_node_type = BiasHiddenNode
 
 
 class OutputLayer(Layer):
   node_type = OutputNode
+  bias_node_type = None
 
 class Connection(object):
   def __init__(self):
@@ -130,16 +127,18 @@ class Connection(object):
 
 
 class Network(object):
-  def __init__(self, *nodes_per_layer):
-    self.learning_rate = 1.
-    self.layers = [InputLayer(nodes_per_layer[0])]
-    self.layers.extend([Layer(n) for n in nodes_per_layer[1:-1]])
-    self.layers.append(OutputLayer(nodes_per_layer[-1]))
+  def __init__(self, nodes_per_layer, add_bias=False, learning_rate=1.):
+    self.learning_rate = learning_rate
+    self.layers = [InputLayer(nodes_per_layer[0], add_bias)]
+    self.layers.extend([HiddenLayer(n, add_bias) for n in nodes_per_layer[1:-1]])
+    self.layers.append(OutputLayer(nodes_per_layer[-1], add_bias=False))
     self.all_backward_connections = {}
     previous_layer = None
     for layer in self.layers:
       if previous_layer:
         for destination_node in layer.nodes:
+          if IsBiasNode(destination_node):
+            continue
           for source_node in previous_layer.nodes:
             connection = destination_node.Connect(source_node)
             self.all_backward_connections[destination_node, source_node] = connection
@@ -178,8 +177,13 @@ class Network(object):
     return connection.weight
 
   def SetPattern(self, pattern):
-    for node, value in zip(self.layers[0].nodes, pattern):
-      node.value = value
+    index = 0
+    for node in self.layers[0].nodes:
+      if IsBiasNode(node):
+        node.value = 1
+      else:
+        node.value = pattern[index]
+        index +=1
 
   def SetTargetValues(self, target):
     for output_node, target_value in zip(self.layers[-1].nodes, target):
@@ -189,7 +193,10 @@ class Network(object):
     self.SetPattern(pattern)
     for layer in self.layers[1:]:
       for node in layer.nodes:
-        node.value = Sigmoid(sum(n.value * c.weight for n, c in node.backward_connections.iteritems()))
+        if IsBiasNode(node):
+          node.value = 1
+        else:
+          node.value = Sigmoid(sum(n.value * c.weight for n, c in node.backward_connections.iteritems()))
 
   def Backpropagate(self):
     for layer in reversed(self.layers[1:]):
@@ -197,6 +204,9 @@ class Network(object):
         for node2, connection in node1.backward_connections.iteritems():
           connection.weight += self.learning_rate * node1.GetError() * node2.value
 
+  def GetError(self):
+    output_layer = self.layers[-1]
+    return sum(abs(node.GetError()) for node in output_layer.nodes) / len(output_layer.nodes)
 
   def ProcessPattern(self, pattern, target):
     self.ClearValues()
@@ -205,20 +215,16 @@ class Network(object):
     self.SetTargetValues(target)
     self.Backpropagate()
 
-def BuildClassifier(filename, max_epochs=10):
-  pattern_reader = PatternReader(filename)
-  input_length = pattern_reader.input_length
-  target_length = pattern_reader.target_length
+  def Predict(self, pattern):
+    self.FeedForward(pattern)
+    output_layer = self.layers[-1]
+    return [node.value for node in output_layer.nodes]
 
-  n = Network(input_length, input_length * 2, target_length)
+def GetTrainedNetwork(training_data, max_error, max_epochs, add_bias, nodes_per_layer, learning_rate=1.):
+  n =Network(nodes_per_layer, add_bias, learning_rate=learning_rate)
   for _ in range(max_epochs):
-    for pattern, target in pattern_reader.patterns:
+    for pattern, target in training_data:
       n.ProcessPattern(pattern, target)
-      # output_layer = n.layers[2]
-      # e = 0
-      # print len(output_layer)
-      # for node in output_layer:
-      #   e += node._error* node._error
-      #   print node._error,
-      # print e
-  return n
+      if n.GetError() < max_error:
+        return n
+  raise FailedToTrainNetwork

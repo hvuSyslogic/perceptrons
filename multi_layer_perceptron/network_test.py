@@ -3,6 +3,16 @@ import unittest
 import csv
 import network
 
+class Normalizer(object):
+  def __init__(self, min_x, max_x):
+    self.min_x = min_x
+    self.max_x = max_x
+
+  def __call__(self, x):
+    return (x - self.min_x) / (self.max_x - self.min_x)
+
+
+
 class TestNodes(unittest.TestCase):
   def testInputNodeCreation(self):
     node = network.InputNode()
@@ -31,18 +41,18 @@ class TestNodes(unittest.TestCase):
     self.assertTrue(isinstance(node, network.BackwardConnectable))
 
   def testNumberOfLayers(self):
-    n = network.Network(2, 2, 1)
+    n = network.Network([2, 2, 1])
     self.assertEqual(len(n.layers), 3)
 
   def testNumberOfNodes(self):
     number_of_nodes = [2, 2, 1]
-    n = network.Network(*number_of_nodes)
+    n = network.Network(number_of_nodes)
     for layer, n in zip(n.layers, number_of_nodes):
       self.assertEqual(len(layer), n)
 
   def testSetPattern(self):
     number_of_nodes = [2, 2, 1]
-    n = network.Network(*number_of_nodes)
+    n = network.Network(number_of_nodes)
     pattern = [9.2, 12.12]
     n.SetPattern(pattern)
     input_nodes = n.layers[0].nodes
@@ -55,7 +65,7 @@ class TestNodes(unittest.TestCase):
 
   def testClear(self):
     number_of_nodes = [2, 2, 1]
-    n = network.Network(*number_of_nodes)
+    n = network.Network(number_of_nodes)
     pattern = [9.2, 12.12]
     n.SetPattern(pattern)
     n.ClearValues()
@@ -72,12 +82,12 @@ class TestNodes(unittest.TestCase):
     node = network.OutputNode()
     self.assertTrue(isinstance(node, network.OutputNode))
 
-    layer = network.InputLayer(2)
+    layer = network.InputLayer(2, add_bias=False)
     self.assertEqual(len(layer), 2)
     for node in layer:
       self.assertTrue(isinstance(node, network.InputNode))
 
-    layer = network.Layer(3)
+    layer = network.HiddenLayer(3, add_bias=False)
     self.assertEqual(len(layer), 3)
     for node in layer:
       self.assertTrue(isinstance(node, network.HiddenNode))
@@ -98,7 +108,7 @@ class TestNodes(unittest.TestCase):
       number_of_output_nodes
     ]
 
-    n = network.Network(*number_of_nodes)
+    n = network.Network(number_of_nodes)
 
     input_layer = n.layers[0]
     self.assertEqual(len(input_layer), number_of_input_nodes)
@@ -141,7 +151,7 @@ class TestNodes(unittest.TestCase):
 
   def testSetWeight(self):
     number_of_nodes = [2, 2, 1]
-    n = network.Network(*number_of_nodes)
+    n = network.Network(number_of_nodes)
     n.ClearValues()
     hidden_layer = n.layers[1]
     input_layer = n.layers[0]
@@ -149,14 +159,14 @@ class TestNodes(unittest.TestCase):
     n.SetWeight(hidden_layer.nodes[0], input_layer.nodes[1], 8.)
     pattern = [9.2, 12.12]
     n.SetPattern(pattern)
-    n.FeedForward()
+    n.FeedForward(pattern)
     retrieved = hidden_layer.nodes[0].value
     expected = network.Sigmoid(12. * 9.2 + 8. * 12.12)
     self.assertAlmostEqual(retrieved, expected, places=3)
 
   def testOutputValue(self):
     number_of_nodes = [2, 2, 1]
-    n = network.Network(*number_of_nodes)
+    n = network.Network(number_of_nodes)
     n.ClearValues()
     output_layer = n.layers[2]
     hidden_layer = n.layers[1]
@@ -172,7 +182,7 @@ class TestNodes(unittest.TestCase):
 
     pattern = [3.5, 2.8]
     n.SetPattern(pattern)
-    n.FeedForward()
+    n.FeedForward(pattern)
     retrieved = output_layer.nodes[0].value
     expected = 0.56 * network.Sigmoid(1.31) + 0.71 * network.Sigmoid(2.04)
     expected = network.Sigmoid(expected)
@@ -181,7 +191,7 @@ class TestNodes(unittest.TestCase):
 
   def testSettingTargetValues(self):
     number_of_nodes = [2, 2, 2]
-    n = network.Network(*number_of_nodes)
+    n = network.Network(number_of_nodes)
     n.ClearValues()
 
     output_layer = n.layers[2]
@@ -202,7 +212,7 @@ class TestNodes(unittest.TestCase):
     target_values = [0.12, 9.27]
     n.SetPattern([9.1, 1.2])
     n.SetTargetValues(target_values)
-    n.FeedForward()
+    n.FeedForward([9.1, 1.2])
 
     output_layer = n.layers[2]
 
@@ -240,7 +250,7 @@ class TestNodes(unittest.TestCase):
 
   def testProcessPattern(self):
     number_of_nodes = [2, 2, 1]
-    n = network.Network(*number_of_nodes)
+    n = network.Network(number_of_nodes)
     output_layer = n.layers[2]
     hidden_layer = n.layers[1]
     input_layer = n.layers[0]
@@ -254,8 +264,6 @@ class TestNodes(unittest.TestCase):
     n.SetWeight(output_layer.nodes[0], hidden_layer.nodes[1], 0.9)
 
     n.FeedForward([0.35, 0.9])
-    print 'original output:', output_layer.nodes[0].value
-
     n.ProcessPattern([0.35, 0.9], [0.5])
     self.assertAlmostEqual(output_layer.nodes[0].value, 0.69, places=3)
 
@@ -293,26 +301,108 @@ class TestNodes(unittest.TestCase):
       places=3
     )
 
-    # n.FeedForward([0.35, 0.9])
-    # print 'new output:', output_layer.nodes[0].value
-    #
-    # for _ in range(1000):
-    #   n.ProcessPattern([0.35, 0.9], [0.5])
-    #   print 'new output:', output_layer.nodes[0].value
+  def Verify(self, n, training_data, limit=0.15):
+    for patern, target in training_data:
+      predicted = n.Predict(patern)
+      for x, y in zip(predicted, target):
+        if abs(x - y) > limit:
+          return False
+    return True
+
+  def RunBinaryClassifier(self, training_data, max_error=0.001):
+    success = False
+    for i in range(20):
+      try:
+        n = network.GetTrainedNetwork(
+          training_data,
+          max_error,
+          5000,
+          True,
+          [2, 3, 2],
+          learning_rate=1.
+        )
+        if self.Verify(n, training_data):
+          success = True
+          break
+      except network.FailedToTrainNetwork:
+        pass
+    return success
+
+  def testXORWithTwoOutputs(self):
+    xor_data = [
+      [[1, 1], [0, 1]],
+      [[0, 0], [0, 1]],
+      [[1, 0], [1, 0]],
+      [[0, 1], [1, 0]],
+    ]
+    self.assertTrue(self.RunBinaryClassifier(xor_data))
+
+    or_data = [
+      [[1, 1], [1, 0]],
+      [[0, 0], [0, 1]],
+      [[1, 0], [1, 0]],
+      [[0, 1], [1, 0]],
+    ]
+    self.assertTrue(self.RunBinaryClassifier(or_data))
+
+    and_data = [
+      [[1, 1], [1, 0]],
+      [[0, 0], [0, 1]],
+      [[1, 0], [0, 1]],
+      [[0, 1], [0, 1]],
+    ]
+    self.assertTrue(self.RunBinaryClassifier(and_data, max_error=0.0002))
+
+  def ReadIrisFile(self, filename, values, normalizer=None):
+    patterns = []
+    targets = []
+    for i, tokens in enumerate(csv.reader(open(filename))):
+      if i > 0:
+        patterns.append([float(x) for x in tokens[0:-1]])
+        targets.append(values[tokens[-1]])
+    if not normalizer:
+      normalizer = self.MakePatternNormalizer(patterns)
+    patterns = [normalizer(p) for p in patterns]
+    for pattern in patterns:
+      for value in pattern:
+        self.assertTrue(0 <= value <=1)
+
+    return [ [p, t] for p, t in zip(patterns, targets)], normalizer
+
+  def MakePatternNormalizer(self, patterns):
+    normalizers = []
+    for column_index in range(len(patterns[0])):
+      x = [row[column_index] for row in patterns]
+      normalizers.append(Normalizer(min(x), max(x)))
+    return lambda input: [normalizers[i](value) for i, value in enumerate(input)]
+
+  def VerifyIrisClassifier(self):
+    values = {
+      'versicolor': [1, 0, 0],
+      'setosa': [0, 1, 0],
+      'virginica': [0, 0, 1],
+    }
+    _, normalizer = self.ReadIrisFile('iris.csv', values)
+    training_data, normalizer = self.ReadIrisFile('iris_training.csv', values, normalizer=normalizer)
+    n = network.GetTrainedNetwork(training_data, 0.0004, 8000, True, [4, 5, 3])
+    verifing_data, _ = self.ReadIrisFile('iris_verifing.csv', values, normalizer=normalizer)
+    failed, succeeded = 0, 0
+    for pattern, target in verifing_data:
+      predicted = n.Predict(pattern)
+      for x, y in zip(predicted, target):
+        if abs(x - y > 0.15):
+          failed += 1
+        else:
+          succeeded += 1
+    success_rate = succeeded * 1. / (succeeded + failed)
+    return success_rate
+
+  def testIris(self):
+    success_rate = 0.
+    for _ in range(10):
+      success_rate = self.VerifyIrisClassifier()
+      if success_rate > 0.9:
+        break
+    self.assertTrue(success_rate > 0.9)
 
 
-  def testBuildClassifier(self):
-    # network.BuildClassifier('iris_training.csv')
-    n = network.BuildClassifier('xor.csv', max_epochs=10)
-    output_layer = n.layers[2]
-    print n.SetPattern([1, 1, 1])
-    print output_layer.nodes[0].value, output_layer.nodes[1].value
-
-    print n.SetPattern([0, 0, 1])
-    print output_layer.nodes[0].value, output_layer.nodes[1].value
-
-    print n.SetPattern([1, 0, 1])
-    print output_layer.nodes[0].value, output_layer.nodes[1].value
-
-    print n.SetPattern([0, 1, 1])
-    print output_layer.nodes[0].value, output_layer.nodes[1].value
