@@ -12,7 +12,6 @@ class Normalizer(object):
     return (x - self.min_x) / (self.max_x - self.min_x)
 
 
-
 class TestNodes(unittest.TestCase):
   def testInputNodeCreation(self):
     node = network.InputNode()
