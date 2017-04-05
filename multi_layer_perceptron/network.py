@@ -121,10 +121,11 @@ class HiddenNode(ForwardConnectable, BackwardConnectable, ErrorGenerator, Node):
     Returns:
       The error for the hidden node as it is calculated by the back propagation.
     """
-    return sum(
-      node.GetError() * connection.weight
-      for node, connection in self.foreward_connections.iteritems()
-    )
+    total_error = 0
+    for node in self.foreward_connections:
+      connection = self.foreward_connections[node]
+      total_error += node.GetError() * connection.weight
+    return total_error
 
 class BiasHiddenNode(HiddenNode, BiasNode):
   """Bias node for a hidden node."""
@@ -271,12 +272,17 @@ class Network(object):
         if IsBiasNode(node):
           node.value = 1
         else:
-          node.value = Sigmoid(sum(n.value * c.weight for n, c in node.backward_connections.iteritems()))
+          total = 0
+          for n in node.backward_connections:
+            c = node.backward_connections[n]
+            total += n.value * c.weight
+          node.value = Sigmoid(total)
 
   def Backpropagate(self):
     for layer in reversed(self.layers[1:]):
       for node1 in layer:
-        for node2, connection in node1.backward_connections.iteritems():
+        for node2 in node1.backward_connections:
+          connection = node1.backward_connections[node2]
           connection.weight += self.learning_rate * node1.GetError() * node2.value
 
   def GetError(self):

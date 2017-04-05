@@ -143,8 +143,10 @@ class TestNodes(unittest.TestCase):
       self.assertIsNone(node.value)
       self.assertFalse(hasattr(node, 'foreward_connections'))
       self.assertEqual(len(node.backward_connections), number_of_hidden_nodes)
-      for node, connection in node.backward_connections.iteritems():
-        self.assertTrue(isinstance(node, network.HiddenNode))
+
+      for node2 in node.backward_connections:
+        connection = node.backward_connections[node2]
+        self.assertTrue(isinstance(node2, network.HiddenNode))
         self.assertTrue(isinstance(connection, network.Connection))
         self.assertTrue(-1 <= connection.weight <= 1)
 

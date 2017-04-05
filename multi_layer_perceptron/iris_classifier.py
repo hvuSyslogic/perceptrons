@@ -73,7 +73,8 @@ def MakeIrisPredictor():
     pattern = [sepal_length ,sepal_width ,petal_length ,petal_width]
     prediction = n.Predict(normalizer(pattern))
     prediction = [0 if x < 0.80 else 1 for x in prediction]
-    for key, value in values.iteritems():
+    for key in values:
+      value = values[key]
       if value == prediction:
         return key
     return 'Not able to predict..'
