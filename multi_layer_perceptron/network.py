@@ -17,6 +17,7 @@ def Sigmoid(x):
 class FailedToSetWeight(Exception):
   """Raised when a connection weight cannot be set."""
 
+
 class FailedToTrainNetwork(Exception):
   """Raised when a the neural network fails to train."""
 
@@ -30,12 +31,14 @@ class Node(object):
     super(Node, self).__init__()
     self.value = None
 
+
 class ForwardConnectable(object):
   """Mixin for nodes that can be connected forward.
 
   Used for the input and hidden nodes but not for the output which
   cannot be connected forwardly.
   """
+
   def __init__(self):
     super(ForwardConnectable, self).__init__()
     self.foreward_connections = {}
@@ -47,6 +50,7 @@ class BackwardConnectable(object):
     Used for the output and hidden nodes but not for the input which
     cannot be connected forwardly.
     """
+
   def __init__(self):
     super(BackwardConnectable, self).__init__()
     self.backward_connections = {}
@@ -65,6 +69,7 @@ class BackwardConnectable(object):
     self.backward_connections[other] = connection
     other.foreward_connections[self] = connection
     return connection
+
 
 class ErrorGenerator(object):
   """Mixin used as a base class for nodes that can generate error.
@@ -106,11 +111,14 @@ class ErrorGenerator(object):
 class BiasNode(object):
   """Designates a node as bias."""
 
+
 class InputNode(Node, ForwardConnectable):
   """Used in the input layer and receives the pattern."""
 
+
 class BiasInputNode(InputNode, BiasNode):
   """Bias node for an input node."""
+
 
 class HiddenNode(ForwardConnectable, BackwardConnectable, ErrorGenerator, Node):
   """Used in the hidden layer."""
@@ -127,8 +135,10 @@ class HiddenNode(ForwardConnectable, BackwardConnectable, ErrorGenerator, Node):
       total_error += node.GetError() * connection.weight
     return total_error
 
+
 class BiasHiddenNode(HiddenNode, BiasNode):
   """Bias node for a hidden node."""
+
 
 class OutputNode(BackwardConnectable, ErrorGenerator, Node):
   """Used in the output layer."""
@@ -148,6 +158,7 @@ class OutputNode(BackwardConnectable, ErrorGenerator, Node):
       The error for the output node as it is calculated by the back propagation.
     """
     return self._target - self.value
+
 
 def IsBiasNode(node):
   """Checks wheather a node is bias or not.
@@ -185,6 +196,7 @@ class InputLayer(Layer):
   node_type = InputNode
   bias_node_type = BiasInputNode
 
+
 class HiddenLayer(Layer):
   """The hidden layer containing hidden nodes and biases."""
   node_type = HiddenNode
@@ -196,8 +208,10 @@ class OutputLayer(Layer):
   node_type = OutputNode
   bias_node_type = None
 
+
 class Connection(object):
   """Connects two nodes."""
+
   def __init__(self):
     self.weight = random.uniform(-1., 1.)
 
@@ -290,7 +304,7 @@ class Network(object):
         node.value = 1
       else:
         node.value = pattern[index]
-        index +=1
+        index += 1
 
   def SetTargetValues(self, target):
     """Sets the target values.
@@ -358,6 +372,7 @@ class Network(object):
     output_layer = self.layers[-1]
     return [node.value for node in output_layer.nodes]
 
+
 def GetTrainedNetwork(training_data, max_error, max_epochs, add_bias, nodes_per_layer, learning_rate=1.):
   """Makes a network.
 
@@ -371,7 +386,7 @@ def GetTrainedNetwork(training_data, max_error, max_epochs, add_bias, nodes_per_
     Returns:
       The trained neural network that can be used for predictions.
     """
-  n =Network(nodes_per_layer, add_bias, learning_rate=learning_rate)
+  n = Network(nodes_per_layer, add_bias, learning_rate=learning_rate)
   for _ in range(max_epochs):
     for pattern, target in training_data:
       n.ProcessPattern(pattern, target)
