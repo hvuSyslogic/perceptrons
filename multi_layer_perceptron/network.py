@@ -203,6 +203,8 @@ class Connection(object):
 
 
 class Network(object):
+  """Implements a feed-forward back-propgation neural network."""
+
   def __init__(self, nodes_per_layer, add_bias=False, learning_rate=1.):
     self.learning_rate = learning_rate
     self.layers = [InputLayer(nodes_per_layer[0], add_bias)]
@@ -222,37 +224,66 @@ class Network(object):
     self.ClearValues()
 
   def RandomizeWeights(self):
+    """Randomizes the weights for all the synapses."""
     for layer in self.layers[1:]:
       for node in layer.nodes:
         for connection in node.backward_connections:
           connection.weight = random.uniform(-1., 1.)
 
   def ClearValues(self):
+    """Clears the values for all nodes."""
     for layer in self.layers:
       for node in layer.nodes:
         node.value = None
 
   def ClearErrors(self):
+    """Clears the errors for all nodes."""
     for layer in self.layers[1:]:
       for node in layer.nodes:
         node.ClearError()
 
   def GetConnection(self, destination_node, source_node):
+    """Gets a connection based on the provided nodes.
+
+    Arguments:
+        destination_node: The node closer to output.
+        source_node : The node closer to input.
+    Returns:
+      The connection from the destination to the source node.
+    """
     return self.all_backward_connections.get((destination_node, source_node))
 
   def SetWeight(self, destination_node, source_node, weight):
+    """Sets the weight for a connection .
+
+    Arguments:
+      destination_node: The node closer to output.
+      source_node : The node closer to input.
+      weight: The weight to set.
+    """
     connection = self.GetConnection(destination_node, source_node)
     if not connection:
       raise FailedToSetWeight
     connection.weight = weight
 
   def GetWeight(self, destination_node, source_node):
+    """Gets the weight for a connection .
+
+      Arguments:
+        destination_node: The node closer to output.
+        source_node : The node closer to input.
+    """
     connection = self.GetConnection(destination_node, source_node)
     if not connection:
       raise FailedToSetWeight
     return connection.weight
 
   def SetPattern(self, pattern):
+    """Sets an input pattern.
+
+    Arguments:
+      pattern: (list) Contains the values for the pattern.
+    """
     index = 0
     for node in self.layers[0].nodes:
       if IsBiasNode(node):
@@ -262,10 +293,20 @@ class Network(object):
         index +=1
 
   def SetTargetValues(self, target):
+    """Sets the target values.
+
+    Arguments:
+      target: (list) Contains the values for the target.
+    """
     for output_node, target_value in zip(self.layers[-1].nodes, target):
       output_node.SetTarget(target_value)
 
   def FeedForward(self, pattern):
+    """Performs a feed forward.
+
+    Arguments:
+      pattern: (list) Contains the values for the pattern.
+    """
     self.SetPattern(pattern)
     for layer in self.layers[1:]:
       for node in layer.nodes:
@@ -279,6 +320,7 @@ class Network(object):
           node.value = Sigmoid(total)
 
   def Backpropagate(self):
+    """Backpropagates the errors."""
     for layer in reversed(self.layers[1:]):
       for node1 in layer:
         for node2 in node1.backward_connections:
@@ -286,10 +328,17 @@ class Network(object):
           connection.weight += self.learning_rate * node1.GetError() * node2.value
 
   def GetError(self):
+    """Returns the total error."""
     output_layer = self.layers[-1]
     return sum(abs(node.GetError()) for node in output_layer.nodes) / len(output_layer.nodes)
 
   def ProcessPattern(self, pattern, target):
+    """Processes a pattern.
+
+    Arguments:
+      pattern: (list) Contains the values for the pattern.
+      target: (list) Contains the values for the target.
+    """
     self.ClearValues()
     self.ClearErrors()
     self.FeedForward(pattern)
@@ -297,11 +346,31 @@ class Network(object):
     self.Backpropagate()
 
   def Predict(self, pattern):
+    """Makes a prediction.
+
+    Arguments:
+      pattern: (list) Contains the values for the pattern.
+
+    Returns:
+      The predicted list of output values.
+    """
     self.FeedForward(pattern)
     output_layer = self.layers[-1]
     return [node.value for node in output_layer.nodes]
 
 def GetTrainedNetwork(training_data, max_error, max_epochs, add_bias, nodes_per_layer, learning_rate=1.):
+  """Makes a network.
+
+    Arguments:
+      training_data: (list of pair of lists) Contains pairs of pattern - target.
+      max_error: (float) The error that will stop the training.
+      max_epochs: (int) The max number of epochs to run for.
+      add_bias: (bool) True to add bias.
+      nodes_per_layer: (list of int) The structure of the netwark.
+      learning_rate: (float) The learning rate.
+    Returns:
+      The trained neural network that can be used for predictions.
+    """
   n =Network(nodes_per_layer, add_bias, learning_rate=learning_rate)
   for _ in range(max_epochs):
     for pattern, target in training_data:
