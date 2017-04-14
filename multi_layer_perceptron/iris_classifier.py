@@ -67,7 +67,7 @@ def MakeIrisPredictor():
   # to see how the net performs when you are running the program. You can try any number
   # of layers / nodes except for the input / output that must always be 4 and 3.
   # Also you can experiment with the minimum error which now is 0.0001.
-  n = network.GetTrainedNetwork(training_data, 0.00001, 8000, True, [4, 5, 5, 3])
+  n = network.GetTrainedNetwork(training_data, 0.01, 8000, True, [4, 5, 5, 3])
   print('ready to predict..')
   def Predictor(sepal_length ,sepal_width ,petal_length ,petal_width):
     pattern = [sepal_length ,sepal_width ,petal_length ,petal_width]

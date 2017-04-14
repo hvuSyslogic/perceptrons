@@ -344,7 +344,8 @@ class Network(object):
   def GetError(self):
     """Returns the total error."""
     output_layer = self.layers[-1]
-    return sum(abs(node.GetError()) for node in output_layer.nodes) / len(output_layer.nodes)
+    return 0.5 * sum(math.pow(node.GetActualError(), 2) for node in output_layer.nodes)
+
 
   def ProcessPattern(self, pattern, target):
     """Processes a pattern.
@@ -373,7 +374,7 @@ class Network(object):
     return [node.value for node in output_layer.nodes]
 
 
-def GetTrainedNetwork(training_data, max_error, max_epochs, add_bias, nodes_per_layer, learning_rate=1.):
+def GetTrainedNetwork(training_data, max_error, max_epochs, add_bias, nodes_per_layer, learning_rate=1., verbose=False):
   """Makes a network.
 
     Arguments:
@@ -387,9 +388,17 @@ def GetTrainedNetwork(training_data, max_error, max_epochs, add_bias, nodes_per_
       The trained neural network that can be used for predictions.
     """
   n = Network(nodes_per_layer, add_bias, learning_rate=learning_rate)
+  current_epoch = 0
   for _ in range(max_epochs):
+    errors = []
     for pattern, target in training_data:
       n.ProcessPattern(pattern, target)
-      if n.GetError() < max_error:
+      error = n.GetError()
+      errors.append(error)
+    current_epoch += 1
+    batch_mode_error = sum(errors) / len(errors)
+    if verbose:
+      print 'epoch: {} batch error:{:2.4f} '.format(current_epoch, batch_mode_error)
+    if batch_mode_error < max_error:
         return n
   raise FailedToTrainNetwork

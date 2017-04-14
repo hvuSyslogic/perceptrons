@@ -385,7 +385,7 @@ class TestNodes(unittest.TestCase):
     }
     _, normalizer = self.ReadIrisFile('iris.csv', values)
     training_data, normalizer = self.ReadIrisFile('training-patterns.csv', values, normalizer=normalizer)
-    n = network.GetTrainedNetwork(training_data, 0.0004, 8000, True, [4, 5, 3])
+    n = network.GetTrainedNetwork(training_data, 0.01, 8000, True, [4, 5, 3], verbose=True)
     verifing_data, _ = self.ReadIrisFile('verification-patterns.csv', values, normalizer=normalizer)
     failed, succeeded = 0, 0
     for pattern, target in verifing_data:
